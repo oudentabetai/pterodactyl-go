@@ -9,7 +9,10 @@ import (
 	"github.com/oudentabetai/pterodactyl-go/storage"
 )
 
-var suffix string = "!!"
+var (
+	suffix   string = "!!"
+	OWNER_ID string = "967088187405107220"
+)
 
 type SessionManager interface {
 	InitializeSession(token string) *discordgo.Session
@@ -38,11 +41,24 @@ func OnMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			pterodactyl.GetStatus(s, m)
 		}
 		if strings.HasPrefix(m.Content, suffix+"setrole") {
+			if m.Author.ID != OWNER_ID {
+				log.Print("User does not have permission to set role: " + OWNER_ID + " vs " + m.Author.ID)
+				s.ChannelMessageSend(m.ChannelID, "このコマンドを使用する権限がありません。")
+				return
+			}
 			fields := strings.Fields(m.Content)
 			if len(fields) == 3 {
 				s.ChannelMessageSend(m.ChannelID, storage.ConfigMgr.SetRole(fields[1], fields[2]))
 			} else {
 				s.ChannelMessageSend(m.ChannelID, "コマンドの形式が正しくありません。例: !!setrole <roleID> <serverID>")
+			}
+		}
+		if strings.HasPrefix(m.Content, suffix+"server") {
+			fields := strings.Fields(m.Content)
+			if len(fields) == 3 {
+				s.ChannelMessageSend(m.ChannelID, pterodactyl.ServerManager(m, fields[1], fields[2]))
+			} else {
+				s.ChannelMessageSend(m.ChannelID, "コマンドの形式が正しくありません。例: !!server <action> <serverIdentifier>")
 			}
 		}
 	}

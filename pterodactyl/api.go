@@ -181,7 +181,54 @@ func GetStatus(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if len(matchedServers) > 0 {
 		sendServerListEmbed(s, m, matchedServers)
+	} else {
+		s.ChannelMessageSend(m.ChannelID, "一致するサーバーが見つかりませんでした。")
 	}
+}
+
+func ServerManager(m *discordgo.MessageCreate, action, serverIdentifier string) string {
+	for _, roleID := range m.Member.Roles {
+		if storage.ConfigMgr.GetServerID(roleID) == serverIdentifier {
+			log.Print("User has permission to " + action + " server: " + serverIdentifier)
+			var signal string
+			switch action {
+			case "start":
+				signal = "start"
+			case "stop":
+				signal = "stop"
+			case "restart":
+				signal = "restart"
+			default:
+				return "不明なアクションです。使用可能なアクション: start, stop, restart"
+			}
+			req, err := http.NewRequest(http.MethodPost, BASE_URL+"client/servers/"+serverIdentifier+"/power", strings.NewReader(`{"signal":"`+signal+`"}`))
+			req.Header.Set("Authorization", "Bearer "+CLIENT_API_KEY)
+			req.Header.Set("Accept", "application/vnd.pterodactyl.v1+json")
+			req.Header.Set("Accept", "application/json")
+			req.Header.Set("Content-Type", "application/json")
+			if err != nil {
+				log.Printf("Request creation error: %v", err)
+				return "サーバー " + action + " リクエストの作成に失敗しました"
+			}
+
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("Do error: %v", err)
+				return "サーバーの " + action + " リクエストの送信に失敗しました"
+			}
+			defer resp.Body.Close()
+
+			if resp.StatusCode == http.StatusNoContent {
+				return "サーバーの " + action + " を開始しました: " + serverIdentifier
+			} else {
+				log.Printf("Unexpected status code: %d", resp.StatusCode)
+				return fmt.Sprintf("サーバーの "+action+" に失敗しました (Status Code: %d)", resp.StatusCode)
+			}
+		}
+	}
+
+	return "このサーバーを " + action + " する権限がありません"
 }
 
 func sendServerListEmbed(s *discordgo.Session, m *discordgo.MessageCreate, servers []Server) {
