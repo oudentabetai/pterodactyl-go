@@ -65,6 +65,13 @@ var (
 			name: "Roll",
 			Description: "Manage roll"
 			
+		
 		}
 	}
+	CommandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		"help": HelpCommandHandler,
+		"servers": ServersCommandHandler,
+		"server": ServercCommandHandler,
+		"role": RoleCommandHandler
+		}
 )
