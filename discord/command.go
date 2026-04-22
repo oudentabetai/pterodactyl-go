@@ -1,77 +1,68 @@
 package discord
 
-import (
-	""
-)
+import "github.com/bwmarrin/discordgo"
 
 var (
 	commands = []*discordgo.ApplicationCommand{
 		{
-			name: "Help",
-			Description: "Help Command"
+			Name:        "Help",
+			Description: "Help Command",
 		},
 		{
-			name: "Servers",
-			Description: "List serverlist"
+			Name:        "Servers",
+			Description: "List serverlist",
 		},
 		{
-			name: "Server",
-			Description: "Manage Server"
+			Name:        "Server",
+			Description: "Manage Server",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Name: "ServerId"
-					Description: "ServerId(Identifier)"
-					Required: False,
-					Type: discordgo.ApplicationCommandOptionString,
+					Name:        "ServerId",
+					Description: "ServerId(Identifier)",
+					Required:    false,
+					Type:        discordgo.ApplicationCommandOptionString,
 				},
 				{
-					Name: "Id"
-					Description: "Serverid(Serverlist Id)"
-					Required: False
-					Type: discordgo.ApplicationCommandOptionInteger
+					Name:        "Id",
+					Description: "Serverid(Serverlist Id)",
+					Required:    false,
+					Type:        discordgo.ApplicationCommandOptionInteger,
 				},
 				{
-					Name: "Action"
-					Description "Action that you want"
-					Required: False
-					Type: discordgo.ApplicationCommandOptionString
+					Name:        "Action",
+					Description: "Action that you want",
+					Required:    false,
+					Type:        discordgo.ApplicationCommandOptionString,
 					Choices: []*discordgo.ApplicationCommandOptionChoice{
 						{
-							Name: "Start"
-							Description: "Start server"
-							Value: "start"
+							Name:  "Start",
+							Value: "start",
 						},
 						{
-							Name: "Stop"
-							Description: "Stop server"
-							Value: "stop"
+							Name:  "Stop",
+							Value: "stop",
 						},
 						{
-							Name: "Restart"
-							Description: "Restart server"
-							Value: "restart"
+							Name:  "Restart",
+							Value: "restart",
 						},
 						{
-							Name: "Information"
-							Description: "Server specific"
-							Value: "info"
+							Name:  "Information",
+							Value: "info",
 						},
 					},
 				},
 			},
-
 		},
 		{
-			name: "Roll",
-			Description: "Manage roll"
-			
-		
-		}
+			Name:        "Roll",
+			Description: "Manage roll",
+		},
 	}
-	CommandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		"help": HelpCommandHandler,
+	CommandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
+		"help":    HelpCommandHandler,
 		"servers": ServersCommandHandler,
-		"server": ServercCommandHandler,
-		"role": RoleCommandHandler
-		}
+		"server":  ServerCommandHandler,
+		"role":    RoleCommandHandler,
+	}
 )

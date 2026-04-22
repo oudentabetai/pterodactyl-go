@@ -38,7 +38,13 @@ func OnMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, pterodactyl.GetUser())
 		}
 		if strings.HasPrefix(m.Content, suffix+"status") {
-			pterodactyl.GetStatus(s, m)
+			embed, err := pterodactyl.GetServers(s, *m.Member)
+			if err != nil {
+				log.Println("Error fetching servers:", err)
+				s.ChannelMessageSend(m.ChannelID, "❌ サーバー情報の取得中にエラーが発生しました。")
+			} else {
+				s.ChannelMessageSendEmbed(m.ChannelID, embed)
+			}
 		}
 		if strings.HasPrefix(m.Content, suffix+"setrole") {
 			if m.Author.ID != OWNER_ID {
@@ -56,7 +62,7 @@ func OnMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if strings.HasPrefix(m.Content, suffix+"server") {
 			fields := strings.Fields(m.Content)
 			if len(fields) == 3 {
-				s.ChannelMessageSend(m.ChannelID, pterodactyl.ServerManager(m, fields[1], fields[2]))
+				s.ChannelMessageSend(m.ChannelID, pterodactyl.ServerManager(*m.Member, fields[1], fields[2]))
 			} else {
 				s.ChannelMessageSend(m.ChannelID, "コマンドの形式が正しくありません。例: !!server <action> <serverIdentifier>")
 			}

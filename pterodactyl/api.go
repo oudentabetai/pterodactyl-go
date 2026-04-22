@@ -2,6 +2,7 @@ package pterodactyl
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -121,22 +122,23 @@ func GetUser() string {
 	return result
 }
 
-func GetStatus(s *discordgo.Session, m *discordgo.MessageCreate) {
+func GetServers(s *discordgo.Session, m discordgo.Member) (*discordgo.MessageEmbed, error) {
 	if APPLICATION_API_KEY == "" || CLIENT_API_KEY == "" {
 		log.Print("API keys are empty")
-		return
+		return nil, errors.New("APIキーが未設定です")
 	}
 
 	resp := Fetch(BASE_URL+"application/servers", APPLICATION_API_KEY)
 	if resp == nil {
 		log.Print("Failed to fetch server list")
-		return
+		return nil, errors.New("サーバーリストの取得に失敗しました")
 	}
 	defer resp.Body.Close()
 
 	var serverres PteroResponse[Server]
 	if err := json.NewDecoder(resp.Body).Decode(&serverres); err != nil {
 		log.Printf("Decode error: %v", err)
+		return nil, errors.New("サーバーリストの取得に失敗しました")
 	}
 	servers := serverres.Data
 	for i := range servers {
@@ -153,12 +155,7 @@ func GetStatus(s *discordgo.Session, m *discordgo.MessageCreate) {
 		servers[i].Attributes.Status = resourceres.Attributes.CurrentState
 	}
 
-	if m.Member == nil {
-		log.Print("Member is nil; cannot resolve roles")
-		return
-	}
-
-	roles := m.Member.Roles
+	roles := m.Roles
 	log.Print("Member roles: " + strings.Join(roles, ", "))
 
 	matchedServers := make([]Server, 0)
@@ -180,14 +177,14 @@ func GetStatus(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if len(matchedServers) > 0 {
-		sendServerListEmbed(s, m, matchedServers)
+		return GetServerEmbedList(s, matchedServers), nil
 	} else {
-		s.ChannelMessageSend(m.ChannelID, "一致するサーバーが見つかりませんでした。")
+		return nil, errors.New("アクセス可能なサーバーが見つかりませんでした。")
 	}
 }
 
-func ServerManager(m *discordgo.MessageCreate, action, serverIdentifier string) string {
-	for _, roleID := range m.Member.Roles {
+func ServerManager(m discordgo.Member, action, serverIdentifier string) string {
+	for _, roleID := range m.Roles {
 		if storage.ConfigMgr.GetServerID(roleID) == serverIdentifier {
 			log.Print("User has permission to " + action + " server: " + serverIdentifier)
 			var signal string
@@ -231,7 +228,7 @@ func ServerManager(m *discordgo.MessageCreate, action, serverIdentifier string) 
 	return "このサーバーを " + action + " する権限がありません"
 }
 
-func sendServerListEmbed(s *discordgo.Session, m *discordgo.MessageCreate, servers []Server) {
+func GetServerEmbedList(s *discordgo.Session, servers []Server) *discordgo.MessageEmbed {
 	embed := &discordgo.MessageEmbed{
 		Title:       "🎮 サーバー稼働状況一覧",
 		Description: "現在管理中のサーバーリストです。",
@@ -267,5 +264,5 @@ func sendServerListEmbed(s *discordgo.Session, m *discordgo.MessageCreate, serve
 		})
 	}
 
-	_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
+	return embed
 }
