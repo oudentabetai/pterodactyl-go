@@ -62,9 +62,13 @@ func (m *ConfigManager) SetRole(roleID, serverID string) string {
 	return "ロールID " + roleID + " をサーバーID " + serverID + " に設定しました。"
 }
 
-func (m *ConfigManager) GetServerID(roleID string) string {
+func (m *ConfigManager) GetServerID(roleID string) []string {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	serverID := m.config.ServerRoles[roleID]
-	return serverID
+
+	id, ok := m.config.ServerRoles[roleID]
+	if !ok {
+		return []string{}
+	}
+	return []string{id}
 }
