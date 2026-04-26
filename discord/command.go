@@ -1,35 +1,39 @@
 package discord
 
-import "github.com/bwmarrin/discordgo"
+import (
+	"log"
+
+	"github.com/bwmarrin/discordgo"
+)
 
 var (
 	commands = []*discordgo.ApplicationCommand{
 		{
-			Name:        "Help",
+			Name:        "help",
 			Description: "Help Command",
 		},
 		{
-			Name:        "Servers",
+			Name:        "servers",
 			Description: "List serverlist",
 		},
 		{
-			Name:        "Server",
+			Name:        "server",
 			Description: "Manage Server",
 			Options: []*discordgo.ApplicationCommandOption{
 				{
-					Name:        "ServerId",
+					Name:        "server_id",
 					Description: "ServerId(Identifier)",
 					Required:    false,
 					Type:        discordgo.ApplicationCommandOptionString,
 				},
 				{
-					Name:        "Id",
+					Name:        "id",
 					Description: "Serverid(Serverlist Id)",
 					Required:    false,
 					Type:        discordgo.ApplicationCommandOptionInteger,
 				},
 				{
-					Name:        "Action",
+					Name:        "action",
 					Description: "Action that you want",
 					Required:    false,
 					Type:        discordgo.ApplicationCommandOptionString,
@@ -55,14 +59,70 @@ var (
 			},
 		},
 		{
-			Name:        "Roll",
-			Description: "Manage roll",
+			Name:        "role",
+			Description: "Manage role",
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Name:        "action",
+					Description: "Action that you want",
+					Required:    true,
+					Type:        discordgo.ApplicationCommandOptionString,
+					Choices: []*discordgo.ApplicationCommandOptionChoice{
+						{
+							Name:  "List",
+							Value: "list",
+						},
+						{
+							Name:  "Add",
+							Value: "add",
+						},
+						{
+							Name:  "Remove",
+							Value: "remove",
+						},
+					},
+				},
+				{
+					Name:        "role",
+					Description: "Role that you want to manage",
+					Required:    false,
+					Type:        discordgo.ApplicationCommandOptionRole,
+				},
+				{
+					Name:        "server_identifier",
+					Description: "Server Identifier",
+					Required:    false,
+					Type:        discordgo.ApplicationCommandOptionString,
+				},
+			},
 		},
 	}
 	CommandHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"help":    HelpCommandHandler,
 		"servers": ServersCommandHandler,
 		"server":  ServerCommandHandler,
-		"role":    RoleCommandHandler,
+		//"role":    RoleCommandHandler,
 	}
 )
+
+func SyncCommands(s *discordgo.Session, guildID string, appID string) {
+	_, err := s.ApplicationCommandBulkOverwrite(appID, guildID, commands)
+	if err != nil {
+		log.Panicf("コマンドの同期に失敗しました: %v", err)
+	}
+	log.Println("コマンドを更新しました")
+}
+
+func OnInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type != discordgo.InteractionApplicationCommand {
+		return
+	}
+
+	name := i.ApplicationCommandData().Name
+	handler, ok := CommandHandlers[name]
+	if !ok {
+		return
+	}
+
+	handler(s, i)
+}

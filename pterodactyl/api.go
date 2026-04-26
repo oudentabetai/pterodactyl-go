@@ -2,14 +2,12 @@ package pterodactyl
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/oudentabetai/pterodactyl-go/storage"
 )
 
 var (
@@ -23,33 +21,18 @@ func SetAPIKeys(applicationAPIKey, clientAPIKey string) {
 	CLIENT_API_KEY = clientAPIKey
 }
 
-type PteroResponse[T any] struct {
-	Data []T `json:"data"`
-}
-
-type User struct {
-	Attributes struct {
-		ID     int    `json:"id"`
-		Name   string `json:"username"`
-		Email  string `json:"email"`
-		IsRoot bool   `json:"is_root"`
-	} `json:"attributes"`
-}
-
-type Server struct {
-	Attributes struct {
-		ID         int    `json:"id"`
-		UUID       string `json:"uuid"`
-		Identifier string `json:"identifier"`
-		Name       string `json:"name"`
-		Status     string `json:"status"`
-	} `json:"attributes"`
-}
-
 type ResourceResponse struct {
 	Attributes struct {
 		CurrentState string `json:"current_state"`
 	} `json:"attributes"`
+}
+
+type userListResponse struct {
+	Data []struct {
+		Attributes struct {
+			ID int `json:"id"`
+		} `json:"attributes"`
+	} `json:"data"`
 }
 
 type Status string
@@ -97,6 +80,27 @@ func Fetch(URL string, apiKey string) *http.Response {
 	return resp
 }
 
+func Post(URL string, apiKey string, body string) *http.Response {
+	log.Print("Posting :" + URL)
+	req, err := http.NewRequest(http.MethodPost, URL, strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+CLIENT_API_KEY)
+	req.Header.Set("Accept", "application/vnd.pterodactyl.v1+json")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	if err != nil {
+		log.Printf("Request creation error: %v", err)
+		return nil
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Do error: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+	return resp
+}
+
 func GetUser() string {
 	if APPLICATION_API_KEY == "" {
 		log.Print("APPLICATION_API_KEY is empty")
@@ -109,160 +113,65 @@ func GetUser() string {
 	}
 	defer resp.Body.Close()
 
-	var res PteroResponse[User]
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+	var userres userListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&userres); err != nil {
 		log.Printf("Decode error: %v", err)
-		return "Decode failed"
+		return "ユーザーの情報を取得できませんでした"
 	}
 
-	var result string
-	for _, user := range res.Data {
-		result += user.Attributes.Name + ", "
+	result := "ユーザー情報:\n"
+	for _, user := range userres.Data {
+		result += fmt.Sprintf("ID: %d\n", user.Attributes.ID)
 	}
 	return result
 }
 
-func GetServers(s *discordgo.Session, m discordgo.Member) (*discordgo.MessageEmbed, error) {
-	if APPLICATION_API_KEY == "" || CLIENT_API_KEY == "" {
+func GetServers(s *discordgo.Session) *http.Response {
+	if APPLICATION_API_KEY == "" {
 		log.Print("API keys are empty")
-		return nil, errors.New("APIキーが未設定です")
+		return nil
 	}
 
 	resp := Fetch(BASE_URL+"application/servers", APPLICATION_API_KEY)
 	if resp == nil {
 		log.Print("Failed to fetch server list")
-		return nil, errors.New("サーバーリストの取得に失敗しました")
+		return nil
+	}
+	return resp
+
+}
+
+func PowerServer(serverIdentifier string, signal string) string {
+	log.Printf("PowerServer called with identifier: %s, signal: %s", serverIdentifier, signal)
+	if CLIENT_API_KEY == "" {
+		log.Print("API keys are empty")
+		return "APIキーが未設定です"
+	}
+	resp := Post(BASE_URL+"client/servers/"+serverIdentifier+"/power", CLIENT_API_KEY, `{"signal":"`+signal+`"}`)
+
+	if resp.StatusCode == http.StatusNoContent {
+		return "サーバーに`" + signal + "`シグナルを送信しました"
+	} else {
+		log.Printf("Unexpected status code: %d", resp.StatusCode)
+		return "サーバーへのシグナル送信に失敗しました"
+	}
+}
+
+func GetServerStatus(serverIdentifier string) Status {
+	if CLIENT_API_KEY == "" {
+		log.Print("API keys are empty")
+		return ""
+	}
+	resp := Fetch(BASE_URL+"client/servers/"+serverIdentifier+"/resources", CLIENT_API_KEY)
+	if resp == nil {
+		log.Print("Failed to fetch server resources")
+		return ""
 	}
 	defer resp.Body.Close()
-
-	var serverres PteroResponse[Server]
-	if err := json.NewDecoder(resp.Body).Decode(&serverres); err != nil {
+	var resourceRes ResourceResponse
+	if err := json.NewDecoder(resp.Body).Decode(&resourceRes); err != nil {
 		log.Printf("Decode error: %v", err)
-		return nil, errors.New("サーバーリストの取得に失敗しました")
+		return ""
 	}
-	servers := serverres.Data
-	for i := range servers {
-		statusResp := Fetch(BASE_URL+"client/servers/"+servers[i].Attributes.Identifier+"/resources", CLIENT_API_KEY)
-		if statusResp == nil {
-			continue
-		}
-		var resourceres ResourceResponse
-		if err := json.NewDecoder(statusResp.Body).Decode(&resourceres); err == nil {
-			servers[i].Attributes.Status = resourceres.Attributes.CurrentState
-		}
-		statusResp.Body.Close()
-
-		servers[i].Attributes.Status = resourceres.Attributes.CurrentState
-	}
-
-	roles := m.Roles
-	log.Print("Member roles: " + strings.Join(roles, ", "))
-
-	matchedServers := make([]Server, 0)
-	added := make(map[string]bool)
-	for _, roleID := range roles {
-		log.Print("Checking role ID: " + roleID)
-		serverID := storage.ConfigMgr.GetServerID(roleID)
-		if serverID == "" {
-			continue
-		}
-
-		for i := range servers {
-			log.Print("Checking server: " + servers[i].Attributes.Identifier + " and " + serverID)
-			if servers[i].Attributes.Identifier == serverID && !added[serverID] {
-				matchedServers = append(matchedServers, servers[i])
-				added[serverID] = true
-			}
-		}
-	}
-
-	if len(matchedServers) > 0 {
-		return GetServerEmbedList(s, matchedServers), nil
-	} else {
-		return nil, errors.New("アクセス可能なサーバーが見つかりませんでした。")
-	}
-}
-
-func ServerManager(m discordgo.Member, action, serverIdentifier string) string {
-	for _, roleID := range m.Roles {
-		if storage.ConfigMgr.GetServerID(roleID) == serverIdentifier {
-			log.Print("User has permission to " + action + " server: " + serverIdentifier)
-			var signal string
-			switch action {
-			case "start":
-				signal = "start"
-			case "stop":
-				signal = "stop"
-			case "restart":
-				signal = "restart"
-			default:
-				return "不明なアクションです。使用可能なアクション: start, stop, restart"
-			}
-			req, err := http.NewRequest(http.MethodPost, BASE_URL+"client/servers/"+serverIdentifier+"/power", strings.NewReader(`{"signal":"`+signal+`"}`))
-			req.Header.Set("Authorization", "Bearer "+CLIENT_API_KEY)
-			req.Header.Set("Accept", "application/vnd.pterodactyl.v1+json")
-			req.Header.Set("Accept", "application/json")
-			req.Header.Set("Content-Type", "application/json")
-			if err != nil {
-				log.Printf("Request creation error: %v", err)
-				return "サーバー " + action + " リクエストの作成に失敗しました"
-			}
-
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				log.Printf("Do error: %v", err)
-				return "サーバーの " + action + " リクエストの送信に失敗しました"
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode == http.StatusNoContent {
-				return "サーバーの " + action + " を開始しました: " + serverIdentifier
-			} else {
-				log.Printf("Unexpected status code: %d", resp.StatusCode)
-				return fmt.Sprintf("サーバーの "+action+" に失敗しました (Status Code: %d)", resp.StatusCode)
-			}
-		}
-	}
-
-	return "このサーバーを " + action + " する権限がありません"
-}
-
-func GetServerEmbedList(s *discordgo.Session, servers []Server) *discordgo.MessageEmbed {
-	embed := &discordgo.MessageEmbed{
-		Title:       "🎮 サーバー稼働状況一覧",
-		Description: "現在管理中のサーバーリストです。",
-		Color:       0x00ff00,
-		Fields:      []*discordgo.MessageEmbedField{},
-	}
-
-	for i, sv := range servers {
-		attr := sv.Attributes
-		status := Status(attr.Status)
-
-		statusEmoji := "⚪"
-		switch status {
-		case StatusRunning:
-			statusEmoji = "🟢"
-		case StatusOffline:
-			statusEmoji = "🔴"
-		case StatusStarting:
-			statusEmoji = "🟡"
-		}
-
-		fieldValue := fmt.Sprintf("🆔 **ID**: %d\n🔑 **Identifier**: `%s`\n📊 **Status**: %s %s",
-			i+1,
-			attr.Identifier,
-			statusEmoji,
-			status.ToJapanese(),
-		)
-
-		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "🏠 " + attr.Name,
-			Value:  fieldValue,
-			Inline: false,
-		})
-	}
-
-	return embed
+	return Status(resourceRes.Attributes.CurrentState)
 }
