@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/oudentabetai/pterodactyl-go/pterodactyl"
 	"github.com/oudentabetai/pterodactyl-go/storage"
 )
+
+const panelBaseURL = "https://web.ofton.dev"
 
 type PteroResponse[T any] struct {
 	Data []T `json:"data"`
@@ -66,7 +70,7 @@ func GetRoles(roleIDs []string) []string {
 	return serverIDs
 }
 
-func GetServerJson(resp *http.Response) *PteroResponse[Server] {
+func DecodeServerResponse(resp *http.Response) *PteroResponse[Server] {
 	var serverres PteroResponse[Server]
 	if err := json.NewDecoder(resp.Body).Decode(&serverres); err != nil {
 		log.Printf("Decode error: %v", err)
@@ -75,8 +79,7 @@ func GetServerJson(resp *http.Response) *PteroResponse[Server] {
 	return &serverres
 }
 
-func ListServers(resp *http.Response) *discordgo.MessageEmbed {
-	serverres := GetServerJson(resp)
+func ListServers(serverres []Server) *discordgo.MessageEmbed {
 	if serverres == nil {
 		return &discordgo.MessageEmbed{
 			Title:       "サーバーリスト",
@@ -87,32 +90,23 @@ func ListServers(resp *http.Response) *discordgo.MessageEmbed {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "サーバーリスト",
-		Description: "取得したサーバーのリストです。",
+		Description: "各サーバーの状態とパネルリンクをまとめています。",
 		Color:       0x00ff00,
 	}
 
-	for i, sv := range serverres.Data {
+	for _, sv := range serverres {
+		serverURL := panelBaseURL + "/server/" + url.PathEscape(sv.Attributes.Identifier)
 		status := Status(pterodactyl.GetServerStatus(sv.Attributes.Identifier))
 
-		statusEmoji := "⚪"
-		switch status {
-		case StatusRunning:
-			statusEmoji = "🟢"
-		case StatusOffline:
-			statusEmoji = "🔴"
-		case StatusStarting:
-			statusEmoji = "🟡"
-		}
-
-		fieldValue := fmt.Sprintf("🆔 **ID**: %d\n🔑 **Identifier**: `%s`\n📊 **Status**: %s %s",
-			i+1,
-			sv.Attributes.Identifier,
-			statusEmoji,
+		fieldValue := fmt.Sprintf("📊 **Status**: %s %s\n🔑 **Identifier**: `%s`\n🔗 [パネルを開く](%s)",
+			statusEmoji(status),
 			status.ToJapanese(),
+			sv.Attributes.Identifier,
+			serverURL,
 		)
 
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
-			Name:   "🏠 " + sv.Attributes.Name,
+			Name:   fmt.Sprintf("%s", sv.Attributes.Name),
 			Value:  fieldValue,
 			Inline: false,
 		})
@@ -120,10 +114,67 @@ func ListServers(resp *http.Response) *discordgo.MessageEmbed {
 	return embed
 }
 
-func ListUsers(resp *http.Response) string {
-	var userres PteroResponse[User]
-	if err := json.NewDecoder(resp.Body).Decode(&userres); err != nil {
-		log.Printf("Decode error: %v", err)
+func statusEmoji(status Status) string {
+	switch status {
+	case StatusRunning:
+		return "🟢"
+	case StatusOffline:
+		return "🔴"
+	case StatusStarting:
+		return "🟡"
+	case StatusStopping:
+		return "🟠"
+	default:
+		return "⚪"
+	}
+}
+
+func ServerDetailEmbed(server Server) *discordgo.MessageEmbed {
+	serverURL := panelBaseURL + "/server/" + url.PathEscape(server.Attributes.Identifier)
+	status := Status(pterodactyl.GetServerStatus(server.Attributes.Identifier))
+
+	statusEmoji := "⚪"
+	switch status {
+	case StatusRunning:
+		statusEmoji = "🟢"
+	case StatusOffline:
+		statusEmoji = "🔴"
+	case StatusStarting:
+		statusEmoji = "🟡"
+	case StatusStopping:
+		statusEmoji = "🟠"
+	}
+
+	return &discordgo.MessageEmbed{
+		Title:       "📦 " + server.Attributes.Name,
+		URL:         serverURL,
+		Description: "サーバー詳細",
+		Color:       0x5865f2,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "識別子",
+				Value:  fmt.Sprintf("`%s`", server.Attributes.Identifier),
+				Inline: true,
+			},
+			{
+				Name:   "状態",
+				Value:  fmt.Sprintf("%s %s", statusEmoji, status.ToJapanese()),
+				Inline: true,
+			},
+			{
+				Name:   "パネル",
+				Value:  fmt.Sprintf("[Web パネルを開く](%s)", serverURL),
+				Inline: false,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{
+			Text: strings.TrimPrefix(serverURL, panelBaseURL),
+		},
+	}
+}
+
+func ListUsers(userres *PteroResponse[User]) string {
+	if userres == nil {
 		return "ユーザーの情報を取得できませんでした"
 	}
 	result := "ユーザー情報:\n"
@@ -131,4 +182,26 @@ func ListUsers(resp *http.Response) string {
 		result += "ID: " + string(rune(user.Attributes.ID)) + "\n"
 	}
 	return result
+}
+
+func GetAccessibleServers(m *discordgo.Member) []Server {
+	servers := DecodeServerResponse(pterodactyl.GetServers(&discordgo.Session{})).Data
+	var serverIDs []string
+	for _, role := range m.Roles {
+		serverIDs = append(serverIDs, storage.ConfigMgr.GetServerID(role)...)
+		log.Print("Role ID: ", role, " Server IDs: ", serverIDs)
+	}
+
+	serverHasAccess := make([]Server, 0)
+	for _, server := range servers {
+		for _, id := range serverIDs {
+			attributes := server.Attributes.Identifier
+			if attributes == id {
+				log.Printf("User has access to server: %s (ID: %s)", server.Attributes.Name, server.Attributes.Identifier)
+				serverHasAccess = append(serverHasAccess, server)
+			}
+
+		}
+	}
+	return serverHasAccess
 }

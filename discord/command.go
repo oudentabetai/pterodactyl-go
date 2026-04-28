@@ -9,16 +9,40 @@ import (
 var (
 	commands = []*discordgo.ApplicationCommand{
 		{
-			Name:        "help",
+			Name: "help",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "ヘルプ",
+				discordgo.Locale("en-US"): "help",
+			},
 			Description: "Help Command",
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "ヘルプコマンド",
+				discordgo.Locale("en-US"): "Help Command",
+			},
 		},
 		{
-			Name:        "servers",
+			Name: "servers",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "サーバー一覧",
+				discordgo.Locale("en-US"): "servers",
+			},
 			Description: "List serverlist",
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "サーバー一覧表示",
+				discordgo.Locale("en-US"): "List serverlist",
+			},
 		},
 		{
-			Name:        "server",
+			Name: "server",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "サーバー",
+				discordgo.Locale("en-US"): "server",
+			},
 			Description: "Manage Server",
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "サーバーの管理",
+				discordgo.Locale("en-US"): "Manage Server",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "server_id",
@@ -59,8 +83,16 @@ var (
 			},
 		},
 		{
-			Name:        "role",
+			Name: "role",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "ロール",
+				discordgo.Locale("en-US"): "role",
+			},
 			Description: "Manage role",
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.Locale("ja"):    "ロール管理",
+				discordgo.Locale("en-US"): "Manage role",
+			},
 			Options: []*discordgo.ApplicationCommandOption{
 				{
 					Name:        "action",
@@ -101,7 +133,7 @@ var (
 		"help":    HelpCommandHandler,
 		"servers": ServersCommandHandler,
 		"server":  ServerCommandHandler,
-		//"role":    RoleCommandHandler,
+		"role":    RoleCommandHandler,
 	}
 )
 

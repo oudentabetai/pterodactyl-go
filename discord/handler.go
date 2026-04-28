@@ -2,6 +2,7 @@ package discord
 
 import (
 	"log"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/oudentabetai/pterodactyl-go/pterodactyl"
@@ -13,7 +14,8 @@ func HelpCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: "This is the Help Message.",
+			Flags:   discordgo.MessageFlagsEphemeral,
+			Content: "ヘルプです。\n使用例:\n/servers - サーバー一覧を表示\n/server action:<start|stop|restart|info> server_identifier:<識別子> - サーバー操作",
 		},
 	})
 	if err != nil {
@@ -25,44 +27,19 @@ func ServersCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate)
 	// 1. 保留応答
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
 	})
 	if err != nil {
 		log.Println("InteractionRespond error:", err)
 		return
 	}
-	var serverIDs []string
-	for _, role := range i.Member.Roles {
-		serverIDs = append(serverIDs, storage.ConfigMgr.GetServerID(role)...)
-	}
 
 	// 2. サーバー情報取得
-	response := pterodactyl.GetServers(s)
-	if response == nil {
-		log.Println("Error fetching servers:", err)
+	accesibleServers := utils.GetAccessibleServers(i.Member)
 
-		// ユーザーにエラーを通知して終了（「考えています」状態を解除）
-		errMsg := "❌ サーバー情報の取得中にエラーが発生しました。"
-		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &errMsg,
-		})
-		return
-	}
-	defer response.Body.Close()
-	json := utils.GetServerJson(response)
-
-	serverHasAccess := make([]utils.Server, 0)
-	for _, server := range json.Data {
-		for _, id := range serverIDs {
-			attributes := string(rune(server.Attributes.ID))
-			if attributes == id {
-				log.Printf("User has access to server: %s (ID: %s)", server.Attributes.Name, server.Attributes.ID)
-				serverHasAccess = append(serverHasAccess, server)
-			}
-
-		}
-	}
-
-	if serverHasAccess == nil {
+	if accesibleServers == nil {
 		log.Println("Error creating embed from server response")
 		errMsg := "❌ サーバー情報の整形中にエラーが発生しました。"
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
@@ -72,7 +49,7 @@ func ServersCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate)
 	}
 	// 3. 正常終了（Embedを表示）
 	_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Embeds: &[]*discordgo.MessageEmbed{responseEmbed},
+		Embeds: &[]*discordgo.MessageEmbed{utils.ListServers(accesibleServers)},
 	})
 
 	if err != nil {
@@ -83,13 +60,16 @@ func ServersCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate)
 func ServerCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
 	})
 	if err != nil {
 		log.Println("InteractionRespond error:", err)
 		return
 	}
 
-	var action, identifier, id string
+	var action, identifier string
 	for _, option := range i.ApplicationCommandData().Options {
 		if option.Name == "action" {
 			action = option.StringValue()
@@ -97,16 +77,124 @@ func ServerCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		if option.Name == "server_id" {
 			identifier = option.StringValue()
 		}
-		if option.Name == "id" {
-			id = option.StringValue()
+		if option.Name == "server_identifier" {
+			identifier = option.StringValue()
 		}
 	}
-	if (id == "" || identifier == "") && action == "" {
-		errMsg := "❌ コマンドの形式が正しくありません。"
+	if (action == "" && identifier == "") || (action != "" && identifier == "") {
+		errorMsg := "❌ コマンドの引数が不足しています。例: !!server <action> <serverIdentifier>"
 		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: &errMsg,
+			Content: &errorMsg,
 		})
 		return
 	}
+	if action == "" {
+		servers := utils.GetAccessibleServers(i.Member)
+		for _, server := range servers {
+			if server.Attributes.Identifier == identifier {
+				embed := utils.ServerDetailEmbed(server)
+				_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+					Embeds: &[]*discordgo.MessageEmbed{embed},
+				})
+				return
+			}
+		}
+		errorMsg := "❌ 指定されたサーバーが見つかりません。"
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &errorMsg,
+		})
+	} else {
+		servers := utils.GetAccessibleServers(i.Member)
+		var Result string
+		for _, server := range servers {
+			if server.Attributes.Identifier != identifier {
+				continue
+			} else {
+				Result = pterodactyl.PowerServer(identifier, action)
+				_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+					Content: &Result,
+				})
+				break
+			}
+		}
+		if Result == "" {
+			errorMsg := "❌ 指定されたサーバーが見つかりません。"
+			s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Content: &errorMsg,
+			})
+		}
+	}
+}
 
+func RoleCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+	})
+	if err != nil {
+		log.Println("InteractionRespond error:", err)
+		return
+	}
+
+	options := i.ApplicationCommandData().Options
+	optionMap := make(map[string]*discordgo.ApplicationCommandInteractionDataOption)
+	for _, opt := range options {
+		optionMap[opt.Name] = opt
+	}
+
+	var (
+		roleID     string
+		identifier string
+		action     string
+	)
+
+	if opt, ok := optionMap["role"]; ok {
+		if r := opt.RoleValue(s, i.GuildID); r != nil {
+			roleID = r.ID
+			log.Printf("選択されたロールID: %s, 名前: %s", r.ID, r.Name)
+		}
+	}
+
+	if opt, ok := optionMap["server_identifier"]; ok {
+		identifier = opt.StringValue()
+		log.Printf("選択されたサーバー識別子: %s", identifier)
+	}
+
+	if opt, ok := optionMap["action"]; ok {
+		action = opt.StringValue()
+		log.Printf("選択されたアクション: %s", action)
+	}
+
+	if (action != "" && identifier == "" && roleID != "") || (action == "list") {
+		results := storage.ConfigMgr.GetRole(roleID)
+		resultText := strings.Join(results, "\n")
+
+		if resultText == "" {
+			resultText = "該当するデータがありませんでした。"
+		}
+
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &resultText,
+		})
+		if err != nil {
+			log.Printf("レスポンス編集失敗: %v", err)
+		}
+	}
+	if action == "add" {
+		result := storage.ConfigMgr.SetRole(roleID, identifier)
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &result,
+		})
+		if err != nil {
+			log.Printf("レスポンス編集失敗: %v", err)
+		}
+	}
+	if action == "remove" {
+		result := storage.ConfigMgr.RemoveRole(roleID, identifier)
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &result,
+		})
+		if err != nil {
+			log.Printf("レスポンス編集失敗: %v", err)
+		}
+	}
 }

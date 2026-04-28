@@ -7,7 +7,6 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/oudentabetai/pterodactyl-go/pterodactyl"
 	"github.com/oudentabetai/pterodactyl-go/storage"
-	"github.com/oudentabetai/pterodactyl-go/utils"
 )
 
 var (
@@ -20,20 +19,6 @@ type SessionManager interface {
 }
 
 type DiscordSessionManager struct{}
-
-func safeSendEmbed(s *discordgo.Session, channelID string, embed *discordgo.MessageEmbed) {
-	if embed == nil {
-		embed = &discordgo.MessageEmbed{
-			Title:       "サーバーリスト",
-			Description: "サーバー情報の整形に失敗しました。",
-			Color:       0xff0000,
-		}
-	}
-
-	if _, err := s.ChannelMessageSendEmbed(channelID, embed); err != nil {
-		log.Printf("failed to send embed: %v", err)
-	}
-}
 
 func (d *DiscordSessionManager) InitializeSession(token string) *discordgo.Session {
 	dg, err := discordgo.New("Bot " + token)
@@ -63,15 +48,7 @@ func OnMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			s.ChannelMessageSend(m.ChannelID, pterodactyl.GetUser())
 		}
 		if strings.HasPrefix(m.Content, suffix+"servers") {
-			resp := pterodactyl.GetServers(s)
-			if resp == nil {
-				s.ChannelMessageSend(m.ChannelID, "サーバー情報の取得に失敗しました。")
-				return
-			}
-			defer resp.Body.Close()
-			embed := utils.ListServers(resp)
-			safeSendEmbed(s, m.ChannelID, embed)
-			return
+
 		}
 		if strings.HasPrefix(m.Content, suffix+"setrole") {
 			if m.Author.ID != OWNER_ID {
@@ -93,6 +70,8 @@ func OnMessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			} else {
 				s.ChannelMessageSend(m.ChannelID, "コマンドの形式が正しくありません。例: !!server <action> <serverIdentifier>")
 			}
+		}
+		if strings.HasPrefix(m.Content, suffix+"test") {
 		}
 	}
 }

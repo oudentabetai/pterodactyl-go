@@ -45,7 +45,8 @@ func main() {
 	defer dgs.Close()
 	log.Println("ボットが起動しました。Ctrl+Cで終了します。")
 
-	discord.SyncCommands(dgs, os.Getenv("TEST_GUILD_ID"), os.Getenv("APPLICATION_ID"))
+	//deleteAllGlobalCommands(dgs, os.Getenv("APPLICATION_ID"))
+	discord.SyncCommands(dgs, "", os.Getenv("APPLICATION_ID"))
 	waitForExitSignal()
 }
 
@@ -53,4 +54,14 @@ func waitForExitSignal() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+}
+
+func deleteAllGlobalCommands(s *discordgo.Session, appID string) {
+	_, err := s.ApplicationCommandBulkOverwrite(appID, "", []*discordgo.ApplicationCommand{})
+
+	if err != nil {
+		log.Printf("グローバルコマンドの削除に失敗しました: %v", err)
+		return
+	}
+	log.Println("すべてのグローバルコマンドを削除しました。")
 }
