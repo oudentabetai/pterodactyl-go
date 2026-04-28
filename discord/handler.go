@@ -11,11 +11,41 @@ import (
 )
 
 func HelpCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "ヘルプ — コマンド一覧",
+		Description: "よく使うコマンドの説明と使用例です。必要に応じてオートコンプリートを使ってください。",
+		Color:       0x5865f2,
+		Fields: []*discordgo.MessageEmbedField{
+			{
+				Name:   "/servers",
+				Value:  "サーバー一覧を表示します。アクセス可能なサーバーだけが表示されます。",
+				Inline: false,
+			},
+			{
+				Name:   "/server",
+				Value:  "`/server server_name:<名前>` または ` /server server_identifier:<識別子> action:<start|stop|restart|info>` の形式で使用します。\n例: `/server server_name:example action:start`",
+				Inline: false,
+			},
+			{
+				Name:   "/role",
+				Value:  "ロールにサーバーを紐付けます。`/role action:add role:@role server_identifier:<識別子>` のように使用します。`list` で登録済みを確認できます。",
+				Inline: false,
+			},
+			{
+				Name:   "補足",
+				Value:  "このボットではサーバー名のオートコンプリートをサポートしています。すべての応答は一時表示（ephemeral）されます。",
+				Inline: false,
+			},
+		},
+		Footer: &discordgo.MessageEmbedFooter{Text: "Panel: https://web.ofton.dev"},
+	}
+
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags:   discordgo.MessageFlagsEphemeral,
-			Content: "ヘルプです。\n使用例:\n/servers - サーバー一覧を表示\n/server action:<start|stop|restart|info> server_identifier:<識別子> - サーバー操作",
+			Flags:  discordgo.MessageFlagsEphemeral,
+			Embeds: []*discordgo.MessageEmbed{embed},
 		},
 	})
 	if err != nil {
@@ -132,6 +162,14 @@ func RoleCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 	if err != nil {
 		log.Println("InteractionRespond error:", err)
+		return
+	}
+
+	if i.Member.User.ID != OWNER_ID {
+		errorMsg := "❌ このコマンドを使用する権限がありません。"
+		s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Content: &errorMsg,
+		})
 		return
 	}
 

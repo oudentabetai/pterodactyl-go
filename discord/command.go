@@ -2,8 +2,10 @@ package discord
 
 import (
 	"log"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/oudentabetai/pterodactyl-go/utils"
 )
 
 var (
@@ -51,10 +53,11 @@ var (
 					Type:        discordgo.ApplicationCommandOptionString,
 				},
 				{
-					Name:        "id",
-					Description: "Serverid(Serverlist Id)",
-					Required:    false,
-					Type:        discordgo.ApplicationCommandOptionInteger,
+					Name:         "server_name",
+					Description:  "Server Name",
+					Required:     false,
+					Autocomplete: true,
+					Type:         discordgo.ApplicationCommandOptionString,
 				},
 				{
 					Name:        "action",
@@ -146,15 +149,54 @@ func SyncCommands(s *discordgo.Session, guildID string, appID string) {
 }
 
 func OnInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	if i.Type != discordgo.InteractionApplicationCommand {
-		return
+	if i.Type == discordgo.InteractionApplicationCommand {
+		name := i.ApplicationCommandData().Name
+		handler, ok := CommandHandlers[name]
+		if !ok {
+			return
+		}
+		handler(s, i)
+	} else {
+		if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
+			data := i.ApplicationCommandData()
+
+			var choices []*discordgo.ApplicationCommandOptionChoice
+
+			for _, opt := range data.Options {
+				if opt.Focused {
+					userInput := opt.StringValue()
+
+					servers := utils.GetAccessibleServers(i.Member)
+					lowerInput := strings.ToLower(userInput)
+					for _, srv := range servers {
+						name := srv.Attributes.Name
+						if lowerInput == "" || strings.Contains(strings.ToLower(name), lowerInput) {
+							choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+								Name:  name,
+								Value: srv.Attributes.Identifier,
+							})
+							if len(choices) >= 25 {
+								break
+							}
+						}
+					}
+
+					if len(choices) > 0 {
+						err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+							Type: discordgo.InteractionResponseType(8), // Application Command Autocomplete Result
+							Data: &discordgo.InteractionResponseData{
+								Choices: choices,
+							},
+						})
+						if err != nil {
+							log.Printf("autocomplete respond error: %v", err)
+						}
+					}
+
+					return
+				}
+			}
+		}
 	}
 
-	name := i.ApplicationCommandData().Name
-	handler, ok := CommandHandlers[name]
-	if !ok {
-		return
-	}
-
-	handler(s, i)
 }
