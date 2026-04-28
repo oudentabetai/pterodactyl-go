@@ -19,7 +19,7 @@ func HelpCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		Fields: []*discordgo.MessageEmbedField{
 			{
 				Name:   "/servers",
-				Value:  "サーバー一覧を表示します。アクセス可能なサーバーだけが表示されます。",
+				Value:  "サーバー一覧を表示します。通常はアクセス可能なサーバーだけが表示されますが、owner は全件表示されます。",
 				Inline: false,
 			},
 			{

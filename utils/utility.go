@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -19,6 +18,8 @@ const panelBaseURL = "https://web.ofton.dev"
 type PteroResponse[T any] struct {
 	Data []T `json:"data"`
 }
+
+var OWNER_ID string
 
 type Server struct {
 	Attributes struct {
@@ -47,8 +48,6 @@ const (
 	StatusStarting Status = "starting"
 	StatusStopping Status = "stopping"
 )
-
-var ownerID = os.Getenv("OWNER_ID")
 
 func (s Status) ToJapanese() string {
 	switch s {
@@ -192,12 +191,14 @@ func GetAccessibleServers(m *discordgo.Member) []Server {
 		return []Server{}
 	}
 
+	serverHasAccess := make([]Server, 0)
 	servers := DecodeServerResponse(pterodactyl.GetServers(&discordgo.Session{})).Data
-	if m.User.ID == ownerID {
+	if m.User.ID == OWNER_ID {
 		if servers == nil {
 			return []Server{}
 		}
-		return servers
+		serverHasAccess = servers
+		return serverHasAccess
 	}
 	var serverIDs []string
 	for _, role := range m.Roles {
@@ -205,7 +206,6 @@ func GetAccessibleServers(m *discordgo.Member) []Server {
 		log.Print("Role ID: ", role, " Server IDs: ", serverIDs)
 	}
 
-	serverHasAccess := make([]Server, 0)
 	for _, server := range servers {
 		for _, id := range serverIDs {
 			attributes := server.Attributes.Identifier
