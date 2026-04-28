@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
@@ -46,6 +47,8 @@ const (
 	StatusStarting Status = "starting"
 	StatusStopping Status = "stopping"
 )
+
+var ownerID = os.Getenv("OWNER_ID")
 
 func (s Status) ToJapanese() string {
 	switch s {
@@ -185,7 +188,17 @@ func ListUsers(userres *PteroResponse[User]) string {
 }
 
 func GetAccessibleServers(m *discordgo.Member) []Server {
+	if m == nil || m.User == nil {
+		return []Server{}
+	}
+
 	servers := DecodeServerResponse(pterodactyl.GetServers(&discordgo.Session{})).Data
+	if m.User.ID == ownerID {
+		if servers == nil {
+			return []Server{}
+		}
+		return servers
+	}
 	var serverIDs []string
 	for _, role := range m.Roles {
 		serverIDs = append(serverIDs, storage.ConfigMgr.GetServerID(role)...)
