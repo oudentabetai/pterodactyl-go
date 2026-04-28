@@ -11,6 +11,7 @@ import (
 	"github.com/oudentabetai/pterodactyl-go/discord"
 	"github.com/oudentabetai/pterodactyl-go/pterodactyl"
 	"github.com/oudentabetai/pterodactyl-go/storage"
+	"github.com/oudentabetai/pterodactyl-go/utils"
 )
 
 var (
@@ -28,6 +29,7 @@ func Env_load() {
 func main() {
 	sessionManager := &discord.DiscordSessionManager{}
 	Env_load()
+	utils.OWNER_ID = os.Getenv("OWNER_ID")
 	pterodactyl.SetAPIKeys(
 		os.Getenv("PANEL_API_TOKEN"),
 		os.Getenv("PANEL_CLIENT_TOKEN"),
@@ -54,6 +56,10 @@ func waitForExitSignal() {
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
+}
+
+func GetOwnerID() string {
+	return os.Getenv("OWNER_ID")
 }
 
 func deleteAllGlobalCommands(s *discordgo.Session, appID string) {
