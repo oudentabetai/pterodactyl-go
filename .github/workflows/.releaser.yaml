@@ -1,0 +1,40 @@
+# .goreleaser.yaml
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    # Windows用には馴染みのあるzip形式でパッケージングする設定
+    format_overrides:
+      - goos: windows
+        format: zip
+    # ファイル名のテンプレート（例: プロジェクト名_バージョン_OS_アーキテクチャ）
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+# ソースコードのアーカイブ設定（デフォルトで有効ですが、明示的に記述可能）
+source:
+  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_src"
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
