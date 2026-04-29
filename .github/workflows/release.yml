@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: write # リリース作成・ファイル添付に必須
+  contents: write
 
 jobs:
   goreleaser:
