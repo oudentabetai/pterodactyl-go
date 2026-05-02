@@ -104,7 +104,7 @@ func ServerCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) 
 		if option.Name == "action" {
 			action = option.StringValue()
 		}
-		if option.Name == "server_id" {
+		if option.Name == "server_name" {
 			identifier = option.StringValue()
 		}
 		if option.Name == "server_identifier" {
@@ -134,6 +134,18 @@ func ServerCommandHandler(s *discordgo.Session, i *discordgo.InteractionCreate) 
 			Content: &errorMsg,
 		})
 	} else {
+		if action == "info" {
+			servers := utils.GetAccessibleServers(i.Member)
+			for _, server := range servers {
+				if server.Attributes.Identifier == identifier {
+					embed := utils.ServerDetailEmbed(server)
+					_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+						Embeds: &[]*discordgo.MessageEmbed{embed},
+					})
+					return
+				}
+			}
+		}
 		servers := utils.GetAccessibleServers(i.Member)
 		var Result string
 		for _, server := range servers {
