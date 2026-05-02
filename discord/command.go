@@ -5,14 +5,9 @@ import (
 	"strings"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/oudentabetai/pterodactyl-go/storage"
 	"github.com/oudentabetai/pterodactyl-go/utils"
 )
-
-var LOG_CHANNEL_ID string
-
-func GetLogChannelID(LOG_CHANNEL_ID string) string {
-	return LOG_CHANNEL_ID
-}
 
 var (
 	commands = []*discordgo.ApplicationCommand{
@@ -155,6 +150,11 @@ func SyncCommands(s *discordgo.Session, guildID string, appID string) {
 }
 
 func OnInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
+		respondAutocomplete(s, i)
+		return
+	}
+
 	if i.Type == discordgo.InteractionApplicationCommand {
 		name := i.ApplicationCommandData().Name
 		handler, ok := CommandHandlers[name]
@@ -165,50 +165,54 @@ func OnInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		for _, opt := range i.ApplicationCommandData().Options {
 			options = append(options, opt.StringValue())
 		}
-		s.ChannelMessageSend(LOG_CHANNEL_ID, "コマンド: "+name+" 実行者: "+i.Member.User.Username+" オプション: "+strings.Join(options, ", "))
 
 		handler(s, i)
-	} else {
-		if i.Type == discordgo.InteractionApplicationCommandAutocomplete {
-			data := i.ApplicationCommandData()
 
-			var choices []*discordgo.ApplicationCommandOptionChoice
-
-			for _, opt := range data.Options {
-				if opt.Focused {
-					userInput := opt.StringValue()
-
-					servers := utils.GetAccessibleServers(i.Member)
-					lowerInput := strings.ToLower(userInput)
-					for _, srv := range servers {
-						name := srv.Attributes.Name
-						if lowerInput == "" || strings.Contains(strings.ToLower(name), lowerInput) {
-							choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
-								Name:  name,
-								Value: srv.Attributes.Identifier,
-							})
-							if len(choices) >= 25 {
-								break
-							}
-						}
-					}
-
-					if len(choices) > 0 {
-						err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-							Type: discordgo.InteractionResponseType(8), // Application Command Autocomplete Result
-							Data: &discordgo.InteractionResponseData{
-								Choices: choices,
-							},
-						})
-						if err != nil {
-							log.Printf("autocomplete respond error: %v", err)
-						}
-					}
-
-					return
+		if storage.Envs.LOG_CHANNEL_ID != "" {
+			go func(commandName, username string, commandOptions []string) {
+				_, err := s.ChannelMessageSend(storage.Envs.LOG_CHANNEL_ID, "コマンド: "+commandName+" 実行者: "+username+" オプション: "+strings.Join(commandOptions, ", "))
+				if err != nil {
+					log.Printf("ログチャンネルへの送信に失敗: %v", err)
 				}
-			}
+			}(name, i.Member.User.Username, options)
 		}
 	}
 
+}
+
+func respondAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	data := i.ApplicationCommandData()
+	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, 25)
+
+	for _, opt := range data.Options {
+		if !opt.Focused {
+			continue
+		}
+
+		userInput := strings.ToLower(opt.StringValue())
+		servers := utils.GetAccessibleServers(i.Member)
+		for _, srv := range servers {
+			name := srv.Attributes.Name
+			if userInput == "" || strings.Contains(strings.ToLower(name), userInput) {
+				choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
+					Name:  name,
+					Value: srv.Attributes.Identifier,
+				})
+				if len(choices) >= 25 {
+					break
+				}
+			}
+		}
+		break
+	}
+
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseType(8),
+		Data: &discordgo.InteractionResponseData{
+			Choices: choices,
+		},
+	})
+	if err != nil {
+		log.Printf("autocomplete respond error: %v", err)
+	}
 }

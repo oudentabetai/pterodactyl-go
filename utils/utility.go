@@ -19,8 +19,6 @@ type PteroResponse[T any] struct {
 	Data []T `json:"data"`
 }
 
-var OWNER_ID string
-
 type Server struct {
 	Attributes struct {
 		ID         int    `json:"id"`
@@ -193,7 +191,7 @@ func GetAccessibleServers(m *discordgo.Member) []Server {
 
 	serverHasAccess := make([]Server, 0)
 	servers := DecodeServerResponse(pterodactyl.GetServers(&discordgo.Session{})).Data
-	if m.User.ID == OWNER_ID {
+	if m.User.ID == storage.Envs.OWNER_ID {
 		if servers == nil {
 			return []Server{}
 		}

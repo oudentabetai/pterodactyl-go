@@ -7,8 +7,6 @@ import (
 	"sync"
 )
 
-var ConfigMgr = NewConfigManager("config.json")
-
 type Config struct {
 	ServerRoles map[string][]string `json:"server_roles"`
 }
