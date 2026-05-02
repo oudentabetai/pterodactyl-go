@@ -8,6 +8,12 @@ import (
 	"github.com/oudentabetai/pterodactyl-go/utils"
 )
 
+var LOG_CHANNEL_ID string
+
+func GetLogChannelID(LOG_CHANNEL_ID string) string {
+	return LOG_CHANNEL_ID
+}
+
 var (
 	commands = []*discordgo.ApplicationCommand{
 		{
@@ -155,6 +161,12 @@ func OnInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if !ok {
 			return
 		}
+		var options []string
+		for _, opt := range i.ApplicationCommandData().Options {
+			options = append(options, opt.StringValue())
+		}
+		s.ChannelMessageSend(LOG_CHANNEL_ID, "コマンド: "+name+" 実行者: "+i.Member.User.Username+" オプション: "+strings.Join(options, ", "))
+
 		handler(s, i)
 	} else {
 		if i.Type == discordgo.InteractionApplicationCommandAutocomplete {

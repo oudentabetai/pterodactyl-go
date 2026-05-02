@@ -34,6 +34,7 @@ func main() {
 		os.Getenv("PANEL_API_TOKEN"),
 		os.Getenv("PANEL_CLIENT_TOKEN"),
 	)
+	discord.GetLogChannelID(os.Getenv("LOG_CHANNEL_ID"))
 	if err := storage.ConfigMgr.Load(); err != nil {
 		log.Fatalf("設定ファイルの読み込みに失敗: %v", err)
 	}
