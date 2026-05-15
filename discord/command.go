@@ -1,6 +1,7 @@
 package discord
 
 import (
+	"fmt"
 	"log"
 	"strings"
 
@@ -161,23 +162,47 @@ func OnInteractionCreate(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if !ok {
 			return
 		}
+
+		// 💡 ログ用にオプションを安全に文字列化する
 		var options []string
 		for _, opt := range i.ApplicationCommandData().Options {
-			options = append(options, opt.StringValue())
+			var valStr string
+
+			// 型に応じて安全に文字列に変換
+			switch opt.Type {
+			case discordgo.ApplicationCommandOptionString:
+				valStr = opt.StringValue()
+			case discordgo.ApplicationCommandOptionRole:
+				// ロール型の場合はIDを文字列にする（あるいは Name が取れれば Name でも良い）
+				if r := opt.RoleValue(s, i.GuildID); r != nil {
+					valStr = fmt.Sprintf("%s(%s)", r.Name, r.ID)
+				} else {
+					valStr = fmt.Sprintf("%v", opt.Value)
+				}
+			default:
+				// その他の型（Integer, Boolean, Userなど）はGoの標準フォーマットで文字列化
+				valStr = fmt.Sprintf("%v", opt.Value)
+			}
+
+			options = append(options, fmt.Sprintf("%s: %s", opt.Name, valStr))
 		}
 
+		// 先にハンドラを実行
 		handler(s, i)
 
 		if storage.Envs.LOG_CHANNEL_ID != "" {
 			go func(commandName, username string, commandOptions []string) {
-				_, err := s.ChannelMessageSend(storage.Envs.LOG_CHANNEL_ID, "コマンド: "+commandName+" 実行者: "+username+" オプション: "+strings.Join(commandOptions, ", "))
+				// ログのフォーマットを少し見やすく調整
+				msg := fmt.Sprintf("【コマンドログ】\n実行者: %s\nコマンド: /%s\nオプション: %s",
+					username, commandName, strings.Join(commandOptions, ", "))
+
+				_, err := s.ChannelMessageSend(storage.Envs.LOG_CHANNEL_ID, msg)
 				if err != nil {
 					log.Printf("ログチャンネルへの送信に失敗: %v", err)
 				}
 			}(name, i.Member.User.Username, options)
 		}
 	}
-
 }
 
 func respondAutocomplete(s *discordgo.Session, i *discordgo.InteractionCreate) {
