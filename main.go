@@ -8,6 +8,8 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/oudentabetai/pterodactyl-go/discord"
+	linkfixer "github.com/oudentabetai/pterodactyl-go/linkfixer"
+	pterodactylbot "github.com/oudentabetai/pterodactyl-go/pterodactyl-bot"
 	"github.com/oudentabetai/pterodactyl-go/storage"
 )
 
@@ -26,8 +28,8 @@ func main() {
 	if err := dgs.Open(); err != nil {
 		log.Fatalf("Discordセッションのオープンに失敗: %v", err)
 	}
-	dgs.AddHandler(discord.OnMessageCreate)
-	dgs.AddHandler(discord.OnInteractionCreate)
+	pterodactylbot.Register(dgs)
+	linkfixer.Register(dgs)
 	defer dgs.Close()
 	log.Println("ボットが起動しました。Ctrl+Cで終了します。")
 
