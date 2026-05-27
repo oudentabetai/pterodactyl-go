@@ -11,37 +11,36 @@ import (
 
 // 各サービスのプレフィックスと変換先のマップ
 var conversionRules = []struct {
-	pattern    string
 	prefix     string
 	replaceTo  string
 	exceptions []string
 }{
 	{
-		pattern:    `(https://twitter\.com|https://x\.com)`,
-		prefix:     "https://",
+		prefix:     "https://twitter.com",
 		replaceTo:  "https://fxtwitter.com",
-		exceptions: []string{"https://twitter.com/", "https://x.com/"},
+		exceptions: []string{"https://twitter.com/"},
 	},
 	{
-		pattern:    `https://www\.instagram\.com`,
+		prefix:     "https://x.com",
+		replaceTo:  "https://fxtwitter.com",
+		exceptions: []string{"https://x.com/"},
+	},
+	{
 		prefix:     "https://www.instagram.com",
 		replaceTo:  "https://www.uuinstagram.com",
 		exceptions: []string{"https://www.instagram.com/"},
 	},
 	{
-		pattern:    `https://pixiv\.net`,
 		prefix:     "https://pixiv.net",
 		replaceTo:  "https://phixiv.net",
 		exceptions: []string{"https://pixiv.net/"},
 	},
 	{
-		pattern:    `https://soundcloud\.com`,
 		prefix:     "https://soundcloud.com",
 		replaceTo:  "https://fxcloud.ofton.dev",
 		exceptions: []string{"https://soundcloud.com/"},
 	},
 	{
-		pattern:    `https://open\.spotify\.com`, // Goに合わせて元の文字列を使用する想定
 		prefix:     "https://open.spotify.com",
 		replaceTo:  "https://open.fxspotify.com",
 		exceptions: []string{}, // 元のコードの exceptions に合わせる場合ここで指定
@@ -65,8 +64,7 @@ func ConvertMessage(msg string) (string, bool) {
 
 		// URLが含まれているかチェック
 		if strings.Contains(msg, rule.prefix) {
-			re := regexp.MustCompile(rule.pattern)
-			converted := re.ReplaceAllString(msg, rule.replaceTo)
+			converted := strings.ReplaceAll(msg, rule.prefix, rule.replaceTo)
 			return converted, true
 		}
 	}
